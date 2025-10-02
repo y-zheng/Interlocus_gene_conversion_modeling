@@ -1,13 +1,13 @@
-library(abind)
+library(abind) #load for binding 3D arrays when adding new segregating sites.
 
 gen.multicopy.gcvar = function (pop, ne.n, cpndist.n = NULL, gc.rate = 0, gc.meanleng = 100) {
- #This function evolves the population for one generation, doing reproduction based on fitness, then reciprocal recombination, IGC, mutation, and finally clean up the sites that are no longer polymorphic.
- ne.o = (dim(pop$sites)[1])/2
- ptnr = c(ne.o+(1:ne.o),1:ne.o)
+ #one generation of evolution: reproduction (with selection), reciprocal recombination, IGC, mutation, and monomorphic-site cleanup; returns an updated pop list.
+ ne.o = (dim(pop$sites)[1])/2 #infer current Ne from the number of haplotypes (rows) in sites.
+ ptnr = c(ne.o+(1:ne.o),1:ne.o) #fixed 1:1 haplotype pairing (1 to N+1, 2 to N+2, …) used for recombination template selection.
  loci = dim(pop$sites)[2]
  
  if (is.null(cpndist.n)) { #If new copy number distribution is not specified, reproduce with default model
-  par1 = sample(1:(2*ne.o),2*ne.n,replace=TRUE,prob=c(pop$fit,pop$fit)) #Parentage sampling: from haplotype to gamete.
+  par1 = sample(1:(2*ne.o),2*ne.n,replace=TRUE,prob=c(pop$fit,pop$fit)) #parent sampling to form 2N gametes; selection enters via pop$fit.
  }
  else { #for example, cpndist.n = c(2000,1000,1000) is 2000 haplotypes with 1 copy, 1000 with 2 copies, 1000 with 3 copies
   par1 = NULL
@@ -22,31 +22,31 @@ gen.multicopy.gcvar = function (pop, ne.n, cpndist.n = NULL, gc.rate = 0, gc.mea
   par1 = sample(par1)
  }
  
- newsites = pop$sites[par1,,]
- newcpn = pop$cpn[par1]
+ newsites = pop$sites[par1,,] #build offspring haplotypes by copying parental blocks (before recombination). 
+ newcpn = pop$cpn[par1] #offspring copy numbers inherit from parents (may change after recombination).
 
  #Recombinations
  #A problem is the recom changes copy number, and it is impossible to set copy number dist AFTER recombination. This can only be remedied by checking whether copies are lost afterwards.
  #Note that pop$rec[1] is always assumed to be 0.
  
- rec.help = runif(2*ne.n,0,1)
- for (j in 2:dim(newsites)[3]) {
+ rec.help = runif(2*ne.n,0,1) #per-haplotype uniform draws reused for all copy indices this generation.
+ for (j in 2:dim(newsites)[3]) { #loop over copies 2 to k - reciprocal recombination: for haplotypes with rec.help < pop$rec[j], replace copy j with the paired partner’s copy j.
   rec.temp = which(rec.help < pop$rec[j])
   newsites[rec.temp,,j] = pop$sites[ptnr[par1[rec.temp]],,j]
  }
- for (i in which(rec.help < pop$rec[dim(newsites)[3]])) {
+ for (i in which(rec.help < pop$rec[dim(newsites)[3]])) { #update newcpn - when recombination affects the last copy index, recompute copy number from the presence flags in column 1.
   newcpn[i] = sum(newsites[i,1,])
  }
  
  #Gene conversions
- gc.rate.i = gc.rate*(newcpn*(newcpn-1)) #GC rate corrected for copy number and direction.
+ gc.rate.i = gc.rate*(newcpn*(newcpn-1)) #scale IGC rate by ordered copy pairs per haplotype.
  gc.help = runif(2*ne.n,0,1)
  for (i in which(gc.help<gc.rate.i)) {
-  gc.leng = rgeom(1,1/gc.meanleng)
+  gc.leng = rgeom(1,1/gc.meanleng) #draw IGC track length (geometrically distributed).
   if (gc.leng >= sleng) {gc.leng = sleng-1}
   gc.site = sample(sleng-gc.leng,1)
   temp = ((pop$pos >= gc.site)&(pop$pos < gc.site+gc.leng)) #sites that are within the GC track
-  if (sum(temp) > 0) {
+  if (sum(temp) > 0) { #choose donor/recipient and overwrite track - interlocus gene conversion within a haplotype.
    gc.cp = sample(which(newsites[i,1,]==1),2) #randomly choose GC donor and recepient
    newsites[i,temp,gc.cp[2]] = newsites[i,temp,gc.cp[1]]
    
@@ -59,7 +59,7 @@ gen.multicopy.gcvar = function (pop, ne.n, cpndist.n = NULL, gc.rate = 0, gc.mea
  temp = temp*newsites[,1,] #All mutations in non-existent copies are multiplied with zero
  ct = 0 #Counting number of individuals already mutated, to know which locus to mutate.
  newpos = pop$pos
- if (sum(temp) > 0) {
+ if (sum(temp) > 0) { #append new segregating sites at the end of the loci array and assign unique positions in [1, sleng].
   newsites = abind(newsites,array(0,dim=c(2*ne.n,sum(temp),dim(newsites)[3])),along=2)
   for (i in 1:(2*ne.n)) {
    for (j in 1:dim(newsites)[3]) {
@@ -76,7 +76,7 @@ gen.multicopy.gcvar = function (pop, ne.n, cpndist.n = NULL, gc.rate = 0, gc.mea
   }
  }
 
- #afq cleanup
+ #cleanup: compute per-locus allele frequency across copies, preserve two sentinel columns, and drop monomorphic sites.
  temp = NULL
  for (i in 1:dim(newsites)[3]) {temp = rbind(temp,newsites[,,i])}
  temp = temp[(temp[,1]+temp[,2]>0),] #Remove lines corresponding to non-existent copies
@@ -92,13 +92,13 @@ gen.multicopy.gcvar = function (pop, ne.n, cpndist.n = NULL, gc.rate = 0, gc.mea
 
  #Calculate fitness (none at this time)
  newfit = rep(1,ne.n)
- 
+ #function return - updated population with recalculated positions and copy numbers; fitness set to neutral (selection reapplied externally each gen).
  return(list(sites=newsites, pos=newpos, fit=newfit, cpn=newcpn, rec=pop$rec))
 
 }
 
 gen.write.multicopy.2 = function (pop, fname) {
- #This function writes out the entire population, including alleles on each snp for each haplotype, positions of snps, and copy number for each haplotype.
+ #write full population: one file per copy (haplotypes as g<0/1...>), SNP positions, and haplotype copy numbers.
  for (j in 1:dim(pop$sites)[3]) {
   out.sites = apply(cbind("g",pop$sites[,,j]),1,paste,collapse="")
   write(out.sites,paste(fname,"_copy_",j,".txt",sep=""),ncolumns=1)
@@ -117,7 +117,7 @@ gen.analysis.2copy.neutral = function (pop) {
  freqs.total = apply(pop$sites,2,sum)
   
  varsites = matrix(0,length(pop$pos),2) #Boolean for whether a site is variable within copy
- varsites[,1] = (freqs[,1] > 0) & (freqs[,1] < 4000)
+ varsites[,1] = (freqs[,1] > 0) & (freqs[,1] < (2*ne))
  varsites[,2] = (freqs[,2] > 0) & (freqs[,2] < sum(hlc2))
   
  ovec = rep(0,16)
@@ -130,16 +130,16 @@ gen.analysis.2copy.neutral = function (pop) {
   
    ovec[8] = sum(2*freqs.total[c(-1,-2)]*(freqs.total[1]-freqs.total[c(-1,-2)])/(freqs.total[1]^2))
    ovec[9] = (length(pop$pos)-2)/sum(1/(1:freqs.total[1]))
-   ovec[10] = sum(2*freqs[c(-1,-2),1]*(4000-freqs[c(-1,-2),1])/(4000^2))
-   ovec[11] = sum(varsites[c(-1,-2),1])/8.87139
+   ovec[10] = sum(2*freqs[c(-1,-2),1]*((2*ne)-freqs[c(-1,-2),1])/((2*ne)^2))
+   ovec[11] = sum(varsites[c(-1,-2),1])/sum(1/1:(2*ne))
    ovec[12] = sum(2*freqs[c(-1,-2),2]*(freqs[1,2]-freqs[c(-1,-2),2])/(freqs[1,2]^2))
    ovec[13] = sum(varsites[c(-1,-2),2])/sum(1/(1:freqs[1,2]))
   
    if (sum(hlc2) == 1) {ovec[14] = sum(pop$sites[hlc2,c(-1,-2),1] != pop$sites[hlc2,c(-1,-2),2])}
    else {ovec[14] = mean(apply((pop$sites[hlc2,c(-1,-2),1] != pop$sites[hlc2,c(-1,-2),2]),1,sum))}
 
-   hs = ((2*freqs[c(-1,-2),1]*(4000-freqs[c(-1,-2),1])/4000) + (2*freqs[c(-1,-2),2]*(freqs[1,2]-freqs[c(-1,-2),2])/freqs[1,2]))/(4000+freqs[1,2])
-   ht = 2*(freqs[c(-1,-2),1]+freqs[c(-1,-2),2])*(4000+freqs[1,2]-freqs[c(-1,-2),1]-freqs[c(-1,-2),2])/((4000+freqs[1,2])^2)
+   hs = ((2*freqs[c(-1,-2),1]*((2*ne)-freqs[c(-1,-2),1])/(2*ne)) + (2*freqs[c(-1,-2),2]*(freqs[1,2]-freqs[c(-1,-2),2])/freqs[1,2]))/((2*ne)+freqs[1,2])
+   ht = 2*(freqs[c(-1,-2),1]+freqs[c(-1,-2),2])*((2*ne)+freqs[1,2]-freqs[c(-1,-2),1]-freqs[c(-1,-2),2])/(((2*ne)+freqs[1,2])^2)
    fsttemp = (ht >0)
    hs = hs[fsttemp]
    ht = ht[fsttemp]
@@ -153,7 +153,7 @@ gen.analysis.2copy.neutral = function (pop) {
 
 
 
-arg = commandArgs(TRUE)
+arg = commandArgs(TRUE) #parse command-line parameters.
 
 sel = as.numeric(arg[1]) #Positive selection coefficient for each copy beyond the original
 gcr = as.numeric(arg[2]) #Here we use per-nucleotide IGC rate
@@ -161,14 +161,14 @@ gcml = as.numeric(arg[3]) #Mean length of IGC track
 rec.rate = as.numeric(arg[4]) #Reciprocal recombination rate
 rr = arg[5] #Replicate number
 
-outhead = paste("Round1.5/Round1.5_adapt_",sel,"_rec_",rec.rate,"_GC_",gcr,"_length_",gcml,"_rep_",rr,sep="")
-
+outhead = paste("Round1.5/Round1.5_adapt_",sel,"_rec_",rec.rate,"_GC_",gcr,"_length_",gcml,"_rep_",rr,sep="") #canonical output prefix including all parameters and replicate for reproducible filenames.
+#core constants — Ne (diploid), sequence length, mu per bp, and mu per copy (mu.t = mu.bp * sleng)
 ne = 2000
 sleng = 20000
 mu.bp = 5e-7
 mu.t = mu.bp*sleng
 
-#Read pop
+#Read pop: read initial haplotypes - expect 2*ne lines of g + binary string; load into copy 1 (copy 2 empty).
 
 inpop = read.table(paste("Neutral_Initial/Neutral_inieq_rep_",rr,".txt",sep=""),header=FALSE)
 nn = dim(inpop)[1]
@@ -180,16 +180,16 @@ for (i in 1:(2*ne)) {
  newsites.3d[i,,1] = c(1,1,gntp.s)
 }
  
-in.pos = c(-2,-1,sample(sleng,ini.loci))
+in.pos = c(-2,-1,sample(sleng,ini.loci)) #initialize positions - assign random positions to the initial ini.loci sites; sentinel positions are -2, -1.
  
-pop.x = list(sites=newsites.3d,pos=in.pos,fit=rep(1,ne),cpn=rep(1,2*ne),rec=c(0,rec.rate))
+pop.x = list(sites=newsites.3d,pos=in.pos,fit=rep(1,ne),cpn=rep(1,2*ne),rec=c(0,rec.rate)) #initial pop.x - set recombination vector as c(0, rec.rate) for the 2-copy stage (copy 1 never recombines).
 #Read pop end
 
 
 #First stage: two copies. Reset if copy 2 is lost.
 sw = 0
 
-while (sw == 0) {
+while (sw == 0) { #main loop with reset logic - evolve up to 200,000 generations; if copy 2 is lost (diploid copy sum == 2N) write a fail record and restart.
  sw = 1
  pop.run = pop.x
  
@@ -198,13 +198,13 @@ while (sw == 0) {
  pop.run$sites[randhap,,2] = pop.run$sites[randhap,,1]
  pop.run$cpn[randhap] = 2
  copy.freq = NULL
- 
+ #write header - column names for the *_stats.txt summary file.
  write("Rep Gen Freq_2 Sites Sites_1 Sites_2 Sites_12 Tpi_all Tw_all Tpi_1 Tw_1 Tpi_2 Tw_2 Dist_12 sFst_12 Fst_12",paste(outhead,"_stats.txt",sep=""),ncolumns=1)
  
  for (gen in 1:200000) {
-  pop.run$fit = (1+sel)^(pop.run$cpn[1:ne]+pop.run$cpn[ne+(1:ne)]-2)
+  pop.run$fit = (1+sel)^(pop.run$cpn[1:ne]+pop.run$cpn[ne+(1:ne)]-2) #selection each generation - diploid fitness (1+sel)^{(copies_on_diploid − 2)}; neutral when sel=0.
 
-  pop.run = gen.multicopy.gcvar(pop.run,ne,gc.rate=gcr/gcml,gc.meanleng=gcml)
+  pop.run = gen.multicopy.gcvar(pop.run,ne,gc.rate=gcr/gcml,gc.meanleng=gcml) #evolution step - call one generation with IGC rate specified per nucleotide: gc.rate = gcr/gcml converts to a per-track initiation rate.
   
   if (sum(pop.run$cpn) == (2*ne)) { #Return to initial state if the second copy is lost
    sw = 0
@@ -218,7 +218,7 @@ while (sw == 0) {
   }
 
  }
- if (sw == 1) {gen.write.multicopy.2(pop.run,paste(outhead,"_gen_200000",sep=""))}
+ if (sw == 1) {gen.write.multicopy.2(pop.run,paste(outhead,"_gen_200000",sep=""))} #final snapshot - write full population at gen 200,000 if the duplicate survives.
  
 
 }
