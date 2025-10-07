@@ -91,7 +91,7 @@ Rscript Neutral_locus_2copy.r 0.01 1e-8 100 1e-8 1
 **Input expected:** `Neutral_Initial/Neutral_inieq_rep_<rep>.txt`  
 **Outputs:** `Round1.5/Round1.5_adapt_<sel>_rec_<rec.rate>_GC_<gcr>_length_<gcml>_rep_<rep>_*`  
 (Stats: `*_stats.txt`; final population files at 200k generations)  
-**Reference:** script internals and I/O paths. fileciteturn4file7
+**Reference:** script internals and I/O paths.
 
 ---
 
@@ -116,7 +116,7 @@ Rscript Neutral_locus_3copy.r 0.01 1e-8 100 50000 1e-8 1
 **Input expected:** `Neutral_Initial/Neutral_inieq_rep_<rep>.txt`  
 **Outputs:** `Round2.5/Round2.5_adapt_<sel>_rec_<rec.rate>_GC_<gcr>_length_<gcml>_timeitv_<dup.time>_rep_<rep>_*`  
 (One stats stream; final population files at 200k generations)  
-**Reference:** arguments and output naming. fileciteturn4file6
+**Reference:** arguments and output naming.
 
 ---
 
@@ -140,7 +140,7 @@ mkdir -p Round3.5_Initial
 Rscript Functional_locus_prepare.r 0.001 1
 ```
 **Outputs:** selection history file and snapshots at 10k / 20k / 30k / **40k**:  
-`Round3.5_Initial/Round3.5_newlocus_inieq_pursel_<pur.sel>_rep_<rep>_g40k.txt` and `..._g40k_pos.txt` (these seed the two‑copy run). fileciteturn4file4
+`Round3.5_Initial/Round3.5_newlocus_inieq_pursel_<pur.sel>_rep_<rep>_g40k.txt` and `..._g40k_pos.txt` (these seed the two‑copy run).
 
 #### C2. Two-copy evolution with purifying selection and similarity-dependent IGC
 Script: `Functional_locus_2copy.r`  
@@ -162,13 +162,13 @@ Rscript Functional_locus_2copy.r 1e-8 100 0.5 0.001 1
 ```
 **Outputs:** three time-series files (one per site class) and a 200k snapshot:  
 `Round3.5_OL/Round3.5_purifying_<pur.sel>_GC_<gcr>_length_<gcml>_pnlty_<gc.log>_rep_<rep>_*`  
-(`*_nonsyn_stats.txt`, `*_syn_stats.txt`, `*_intron_stats.txt`, plus final population files) fileciteturn4file9
+(`*_nonsyn_stats.txt`, `*_syn_stats.txt`, `*_intron_stats.txt`, plus final population files)
 
 ---
 
 ### D. Functional gene with **long vs. short introns** — 2 copies
 
-Again two scripts: a **burn-in** using a genome with 6 intron classes, then the **two-copy** run that reports per‑class stats (nonsyn, syn, and introns 1–6). Introns span sizes of **3000, 1200, 600, 300, 60, 2840 bp** across six classes. fileciteturn4file3
+Again two scripts: a **burn-in** using a genome with 6 intron classes, then the **two-copy** run that reports per‑class stats (nonsyn, syn, and introns 1–6). Introns span sizes of **3000, 1200, 600, 300, 60, 2840 bp** across six classes.
 
 #### D1. Burn-in
 Script: `Functional_locus_longshort_intron_prepare.r`  
@@ -184,7 +184,7 @@ Rscript Functional_locus_longshort_intron_prepare.r <pur.sel> <rep>
 mkdir -p Round3.5_Initial
 Rscript Functional_locus_longshort_intron_prepare.r 0.001 1
 ```
-**Outputs:** `Round3.5_Initial/Round3.5_newlocus_inieq_pursel_<pur.sel>_rep_<rep>_g40k.txt` and `..._g40k_pos.txt`. fileciteturn4file0
+**Outputs:** `Round3.5_Initial/Round3.5_newlocus_inieq_pursel_<pur.sel>_rep_<rep>_g40k.txt` and `..._g40k_pos.txt`.
 
 #### D2. Two-copy evolution (long/short introns)
 Script: `Functional_locus_longshort_intron_2copy.r`  
@@ -201,7 +201,7 @@ mkdir -p Round3.5_NL
 Rscript Functional_locus_longshort_intron_2copy.r 1e-8 100 0.5 0.001 1
 ```
 **Outputs:** per-class stats (8 classes: nonsyn, syn, intron1–intron6) and a 200k snapshot:  
-`Round3.5_NL/Round3.5NL_purifying_<pur.sel>_GC_<gcr>_length_<gcml>_pnlty_<gc.log>_rep_<rep>_*` fileciteturn4file5
+`Round3.5_NL/Round3.5NL_purifying_<pur.sel>_GC_<gcr>_length_<gcml>_pnlty_<gc.log>_rep_<rep>_*`
 
 ---
 
